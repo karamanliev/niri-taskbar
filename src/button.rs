@@ -1,10 +1,10 @@
 use std::{cell::RefCell, path::PathBuf};
 
 use waybar_cffi::gtk::{
-    self as gtk,
+    self as gtk, Border, CssProvider, IconLookupFlags, IconSize, IconTheme, ReliefStyle,
+    StateFlags,
     gdk_pixbuf::Pixbuf,
     prelude::{ButtonExt, CssProviderExt, GdkPixbufExt, IconThemeExt, StyleContextExt, WidgetExt},
-    Border, CssProvider, IconLookupFlags, IconSize, IconTheme, ReliefStyle, StateFlags,
 };
 
 use crate::state::State;
@@ -122,10 +122,13 @@ impl Button {
     }
 
     fn connect_size_allocate(&self, icon_path: Option<PathBuf>) {
+        let state = self.state.clone();
         let last_size = RefCell::new(None);
 
         self.button
             .connect_size_allocate(move |button, allocation| {
+                let config = state.config();
+                let icon_size = config.icon_size();
                 // Figure out if we actually need to redraw, since it's relatively expensive.
                 //
                 // The first condition is pretty easy: is there an image on the button? If not,
@@ -167,15 +170,18 @@ impl Button {
                     // applied after the button is first rendered.
                     //
                     // That seems to be the price we have to pay, though, so here we are.
-                    let context = button.style_context();
-                    let border = context.border(StateFlags::NORMAL);
-                    let margin = context.margin(StateFlags::NORMAL);
-                    let padding = context.padding(StateFlags::NORMAL);
 
-                    let size = allocation.height()
-                        - border.vertical_size()
-                        - margin.vertical_size()
-                        - padding.vertical_size();
+                    let size = icon_size.unwrap_or_else(|| {
+                        let context = button.style_context();
+                        let border = context.border(StateFlags::NORMAL);
+                        let margin = context.margin(StateFlags::NORMAL);
+                        let padding = context.padding(StateFlags::NORMAL);
+
+                        allocation.height()
+                            - border.vertical_size()
+                            - margin.vertical_size()
+                            - padding.vertical_size()
+                    });
 
                     // Now we know the size, we can actually load the image.
                     let image =

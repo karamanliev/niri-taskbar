@@ -8,6 +8,8 @@ use serde::{Deserialize, Deserializer};
 #[derive(Debug, Default, Deserialize)]
 pub struct Config {
     apps: HashMap<String, Vec<AppConfig>>,
+    #[serde(rename = "icon-size")]
+    icon_size: Option<i32>,
 }
 
 impl Config {
@@ -39,6 +41,11 @@ impl Config {
             ),
             None => Box::new(std::iter::empty()),
         }
+    }
+    /// Returns predefined icon size
+    #[inline]
+    pub fn icon_size(&self) -> Option<i32> {
+        self.icon_size
     }
 }
 

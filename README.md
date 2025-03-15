@@ -41,7 +41,9 @@ practice will look something like this:
   "modules-left": ["cffi/niri-taskbar"],
   // ...
   "cffi/niri-taskbar": {
-    "module-path": "/your/path/to/libniri_taskbar.so"
+    "module_path": "/your/path/to/libniri_taskbar.so",
+    // set icon size
+    "icon-size": 24
   }
 }
 ```
