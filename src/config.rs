@@ -15,6 +15,8 @@ pub struct Config {
     show_all_outputs: bool,
     #[serde(default)]
     only_current_workspace: bool,
+    #[serde(default)]
+    icon_size: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -106,6 +108,12 @@ impl Config {
     #[inline]
     pub fn only_current_workspace(&self) -> bool {
         self.only_current_workspace
+    }
+
+    /// Returns the configured icon size, if set
+    #[inline]
+    pub fn icon_size(&self) -> Option<i32> {
+        self.icon_size
     }
 }
 

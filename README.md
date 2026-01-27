@@ -59,8 +59,27 @@ practice will look something like this:
     "module_path": "/your/path/to/libniri_taskbar.so",
     // by deafult windows from all workspaces are displayed
     "only_current_workspace": true,
+    // optional: set a fixed icon size in pixels (defaults to automatic sizing based on button height)
+    "icon_size": 24,
 }
 ```
+
+### Icon size
+
+By default, the taskbar automatically calculates icon sizes based on the button's
+allocated height (accounting for padding, margins, and borders). You can override
+this with a fixed size:
+
+```jsonc
+{
+  "cffi/niri-taskbar": {
+    // other settings
+    "icon_size": 24,
+  },
+}
+```
+
+The value is in pixels and will be used for both width and height of the icons.
 
 ### Application highlighting
 

@@ -375,9 +375,9 @@ impl Instance {
                 Entry::Vacant(entry) => {
                     let button = Button::new(&self.state, window);
 
-                    // Implicitly adding the button widget to the box as we create it simplifies
-                    // reordering, since it means we can just do it as we go.
-                    self.container.add(button.widget());
+                    // Add the button widget to the box with non-expanding packing to prevent
+                    // vertical expansion. This allows CSS padding to control the vertical size.
+                    self.container.pack_start(button.widget(), false, false, 0);
                     entry.insert(button)
                 }
             };

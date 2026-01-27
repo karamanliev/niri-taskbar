@@ -57,6 +57,9 @@ impl Button {
         button.set_always_show_image(true);
         button.set_relief(ReliefStyle::None);
 
+        // Center the button vertically within the container
+        button.set_valign(gtk::Align::Center);
+
         // Provide the base CSS for each button that users can then extend.
         BUTTON_CSS_PROVIDER.with(|provider| {
             button
@@ -145,6 +148,7 @@ impl Button {
     #[tracing::instrument(level = "TRACE")]
     fn connect_size_allocate(&self, icon_path: Option<PathBuf>) {
         let last_size = RefCell::new(None);
+        let configured_size = self.state.config().icon_size();
 
         self.button
             .connect_size_allocate(move |button, allocation| {
@@ -171,6 +175,9 @@ impl Button {
                 if must_redraw {
                     // Calculate the actual image size we need.
                     //
+                    // If icon_size is configured, use that directly. Otherwise, calculate based
+                    // on the button's allocation size.
+                    //
                     // Gtk3 doesn't provide a useful way to get the actual inner size of the
                     // element after applying style rules, so we have to do that here, otherwise we
                     // may draw the image too big and cause the container to grow. (Which will then
@@ -189,15 +196,19 @@ impl Button {
                     // applied after the button is first rendered.
                     //
                     // That seems to be the price we have to pay, though, so here we are.
-                    let context = button.style_context();
-                    let border = context.border(StateFlags::NORMAL);
-                    let margin = context.margin(StateFlags::NORMAL);
-                    let padding = context.padding(StateFlags::NORMAL);
+                    let size = if let Some(size) = configured_size {
+                        size
+                    } else {
+                        let context = button.style_context();
+                        let border = context.border(StateFlags::NORMAL);
+                        let margin = context.margin(StateFlags::NORMAL);
+                        let padding = context.padding(StateFlags::NORMAL);
 
-                    let size = allocation.height()
-                        - border.vertical_size()
-                        - margin.vertical_size()
-                        - padding.vertical_size();
+                        allocation.height()
+                            - border.vertical_size()
+                            - margin.vertical_size()
+                            - padding.vertical_size()
+                    };
 
                     // Now we know the size, we can actually load the image.
                     let image =
