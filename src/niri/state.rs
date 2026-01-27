@@ -122,6 +122,8 @@ enum Inner {
 struct Niri {
     windows: BTreeMap<u64, NiriWindow>,
     workspaces: BTreeMap<u64, Workspace>,
+    /// Track which workspace is currently active on each output
+    active_workspace_per_output: std::collections::HashMap<String, u64>,
 }
 
 impl Niri {
@@ -129,6 +131,7 @@ impl Niri {
         let mut niri = Niri {
             windows: Default::default(),
             workspaces: Default::default(),
+            active_workspace_per_output: Default::default(),
         };
 
         niri.replace_workspaces(workspaces);
@@ -150,6 +153,16 @@ impl Niri {
 
     fn replace_workspaces(&mut self, workspaces: Vec<Workspace>) {
         self.workspaces = workspaces.into_iter().map(|ws| (ws.id, ws)).collect();
+
+        // Initialize active_workspace_per_output based on current workspace states
+        self.active_workspace_per_output.clear();
+        for workspace in self.workspaces.values() {
+            if workspace.is_active {
+                if let Some(output) = &workspace.output {
+                    self.active_workspace_per_output.insert(output.clone(), workspace.id);
+                }
+            }
+        }
     }
 
     fn set_focus(&mut self, id: Option<u64>) {
@@ -162,6 +175,13 @@ impl Niri {
     fn set_active_workspace(&mut self, id: u64) {
         for workspace in self.workspaces.values_mut() {
             workspace.is_active = workspace.id == id
+        }
+
+        // Track the active workspace for this output
+        if let Some(workspace) = self.workspaces.get(&id) {
+            if let Some(output) = &workspace.output {
+                self.active_workspace_per_output.insert(output.clone(), id);
+            }
         }
     }
 
@@ -197,11 +217,21 @@ impl Niri {
             .filter_map(|window| {
                 if let Some(ws_id) = window.workspace_id {
                     if let Some(workspace) = self.workspaces.get(&ws_id) {
-                        return if only_current_workspace && !workspace.is_active {
-                            None
-                        } else {
-                            Some(WindowWorkspace { window, workspace })
-                        };
+                        if only_current_workspace {
+                            // Check if this workspace is currently active on its output
+                            let is_active_on_output = workspace.output
+                                .as_ref()
+                                .and_then(|output| self.active_workspace_per_output.get(output))
+                                .map(|&active_id| active_id == ws_id)
+                                .unwrap_or(false);
+
+                            // Show window if workspace is globally active OR active on its output
+                            if !workspace.is_active && !is_active_on_output {
+                                return None;
+                            }
+                        }
+
+                        return Some(WindowWorkspace { window, workspace });
                     }
                 }
                 None
