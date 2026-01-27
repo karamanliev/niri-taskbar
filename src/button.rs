@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, path::PathBuf};
+use std::{cell::RefCell, fmt::Debug, path::PathBuf, rc::Rc};
 
 use waybar_cffi::gtk::{
     self as gtk, Border, CssProvider, IconLookupFlags, IconSize, IconTheme, ReliefStyle,
@@ -13,6 +13,8 @@ use crate::state::State;
 pub struct Button {
     app_id: Option<String>,
     button: gtk::Button,
+    is_focused: Rc<RefCell<bool>>,
+    workspace: Rc<RefCell<String>>,
     state: State,
 }
 
@@ -45,7 +47,7 @@ thread_local! {
 impl Button {
     /// Instantiates a new button, including creating a new Gtk button internally.
     #[tracing::instrument(level = "TRACE", fields(app_id = &window.app_id))]
-    pub fn new(state: &State, window: &niri_ipc::Window) -> Self {
+    pub fn new(state: &State, window: &crate::niri::Window) -> Self {
         let state = state.clone();
 
         // Set up the basic image button.
@@ -72,14 +74,21 @@ impl Button {
             .as_deref()
             .and_then(|id| state.icon_cache().lookup(id));
 
+        let workspace = window
+            .output()
+            .and_then(|output| window.workspace_id.map(|ws_id| format!("{}/{}", output, ws_id)))
+            .unwrap_or_default();
+
         let button = Self {
             app_id,
             button,
+            is_focused: Rc::new(RefCell::new(false)),
+            workspace: Rc::new(RefCell::new(workspace)),
             state,
         };
 
         // Set up our event handlers. It's easier to do this with self already available.
-        button.connect_click_handler(window.id);
+        button.connect_button_press_handler(window.id);
         button.connect_size_allocate(icon_path);
 
         button
@@ -88,6 +97,7 @@ impl Button {
     /// Sets whether the window represented by this button is currently focused.
     #[tracing::instrument(level = "TRACE")]
     pub fn set_focus(&self, focus: bool) {
+        *self.is_focused.borrow_mut() = focus;
         let context = self.button.style_context();
 
         if focus {
@@ -122,6 +132,12 @@ impl Button {
         }
     }
 
+    /// Updates the workspace for this button.
+    #[tracing::instrument(level = "TRACE")]
+    pub fn set_workspace(&self, workspace: String) {
+        *self.workspace.borrow_mut() = workspace;
+    }
+
     /// Sets the window to urgent: that is, needing attention.
     ///
     /// This state is automatically cleared the next time the window is focused.
@@ -135,13 +151,50 @@ impl Button {
         &self.button
     }
 
-    fn connect_click_handler(&self, window_id: u64) {
+    fn connect_button_press_handler(&self, window_id: u64) {
         let state = self.state.clone();
+        let is_focused = self.is_focused.clone();
+        let workspace = self.workspace.clone();
 
-        self.button.connect_clicked(move |_| {
-            if let Err(e) = state.niri().activate_window(window_id) {
-                tracing::warn!(%e, id = window_id, "error trying to activate window");
+        self.button.connect_button_press_event(move |_, event| {
+            let button = event.button();
+
+            match button {
+                1 => {
+                    // Left click: focus window, or focus previous from same workspace if already focused
+                    if *is_focused.borrow() {
+                        let workspace_name = workspace.borrow().clone();
+                        if let Some(prev_id) = state.get_previous_focused(&workspace_name) {
+                            // Focus the previous window from this workspace by ID
+                            if let Err(e) = state.niri().activate_window(prev_id) {
+                                tracing::warn!(%e, id = prev_id, "error trying to focus previous window");
+                            }
+                        } else {
+                            // No previous window tracked, focus this window again (no-op)
+                            tracing::trace!("no previous window in workspace history");
+                        }
+                    } else {
+                        if let Err(e) = state.niri().activate_window(window_id) {
+                            tracing::warn!(%e, id = window_id, "error trying to activate window");
+                        }
+                    }
+                }
+                2 => {
+                    // Middle click: close window
+                    if let Err(e) = state.niri().close_window(window_id) {
+                        tracing::warn!(%e, id = window_id, "error trying to close window");
+                    }
+                }
+                3 => {
+                    // Right click: toggle floating
+                    if let Err(e) = state.niri().toggle_window_floating(window_id) {
+                        tracing::warn!(%e, id = window_id, "error trying to toggle window floating");
+                    }
+                }
+                _ => {}
             }
+
+            gtk::glib::Propagation::Proceed
         });
     }
 

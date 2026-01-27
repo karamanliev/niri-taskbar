@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use async_channel::Sender;
 use futures::{Stream, StreamExt};
@@ -13,6 +16,13 @@ use crate::{
     notify::{self, EnrichedNotification},
 };
 
+/// Tracks the current and previous focused window IDs for a workspace.
+#[derive(Debug, Clone, Default)]
+struct FocusHistory {
+    current: Option<u64>,
+    previous: Option<u64>,
+}
+
 /// Global state for the taskbar.
 #[derive(Debug, Clone)]
 pub struct State(Arc<Inner>);
@@ -24,6 +34,7 @@ impl State {
             config: config.clone(),
             icon_cache: icon::Cache::default(),
             niri: Niri::new(config),
+            focus_history: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
 
@@ -40,6 +51,24 @@ impl State {
     /// Accesses the global [`Niri`] instance.
     pub fn niri(&self) -> &Niri {
         &self.0.niri
+    }
+
+    /// Updates the focus history for a workspace when a window gains focus.
+    pub fn update_focus_history(&self, workspace: &str, window_id: u64) {
+        let mut history = self.0.focus_history.lock().expect("focus history lock");
+        let entry = history.entry(workspace.to_string()).or_default();
+
+        // Only update if this is a different window
+        if entry.current != Some(window_id) {
+            entry.previous = entry.current;
+            entry.current = Some(window_id);
+        }
+    }
+
+    /// Gets the previously focused window ID for a workspace.
+    pub fn get_previous_focused(&self, workspace: &str) -> Option<u64> {
+        let history = self.0.focus_history.lock().expect("focus history lock");
+        history.get(workspace).and_then(|entry| entry.previous)
     }
 
     pub fn event_stream(&self) -> Result<impl Stream<Item = Event> + use<>, Error> {
@@ -74,6 +103,7 @@ struct Inner {
     config: Config,
     icon_cache: icon::Cache,
     niri: Niri,
+    focus_history: Arc<Mutex<HashMap<String, FocusHistory>>>,
 }
 
 pub enum Event {

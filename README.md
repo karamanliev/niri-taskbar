@@ -81,6 +81,14 @@ this with a fixed size:
 
 The value is in pixels and will be used for both width and height of the icons.
 
+### Mouse interactions
+
+The taskbar supports different actions based on which mouse button you click:
+
+- **Left click**: Focus the window. If the window is already focused, switches to the previously focused window on the same workspace (cycles between windows on the current workspace only).
+- **Middle click**: Close the window.
+- **Right click**: Toggle the window's floating state.
+
 ### Application highlighting
 
 In addition to [notification support](#notifications), you can highlight

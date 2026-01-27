@@ -382,6 +382,18 @@ impl Instance {
                 }
             };
 
+            // Update the workspace.
+            let workspace = window
+                .output()
+                .and_then(|output| window.workspace_id.map(|ws_id| format!("{}/{}", output, ws_id)))
+                .unwrap_or_default();
+            button.set_workspace(workspace.clone());
+
+            // Track focus changes for workspace-specific history.
+            if window.is_focused && !workspace.is_empty() {
+                self.state.update_focus_history(&workspace, window.id);
+            }
+
             // Update the window properties.
             button.set_focus(window.is_focused);
             button.set_title(window.title.as_deref());
